@@ -39,16 +39,17 @@ void Print_vector(double local_b[], int local_n, int n, char title[],
       int my_rank, MPI_Comm comm);
 void Parallel_vector_sum(double local_x[], double local_y[], 
       double local_z[], int local_n);
-void Parallel_vector_dot(double local_x[], double local_y[], 
-      double local_z[], int local_n, double dotProduct);
+int Parallel_vector_dot(double local_x[], double local_y[], 
+      double local_z[], int local_n);
+int Parallel_vector_scalar(double local_vector[], double scalar, int local_n);
 
-
+// Ref: https://github.com/meifeng/MPI/blob/master/4_DotProduct/dotproduct.c
 /*-------------------------------------------------------------------*/
 int main(void) {
    int n, local_n; 
    int comm_sz, my_rank;
    double *local_x, *local_y, *local_z;
-   double dotProduct;
+   int dotProduct;
    MPI_Comm comm;
 
    MPI_Init(NULL, NULL);
@@ -66,9 +67,21 @@ int main(void) {
    Read_vector(local_y, local_n, n, "y", my_rank, comm);
    
    Parallel_vector_sum(local_x, local_y, local_z, local_n);
-   //Parallel_vector_dot(local_x, local_y, local_z, local_n, dotProduct);
-   //printf("El resultado del producto punto es %f", dotProduct);
+
    Print_vector(local_z, local_n, n, "The sum is", my_rank, comm);
+
+   int product = Parallel_vector_dot(local_x, local_y, local_z, local_n);
+   int result;
+   MPI_Reduce(&product, &result, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+ 
+   Print_vector(local_x, local_n, n, "\nDot points in array x: ", my_rank, comm);
+   Print_vector(local_y, local_n, n, "Dot points in array y: ", my_rank, comm);
+
+   Parallel_vector_scalar(local_x, 5, local_n);
+   Parallel_vector_scalar(local_y, 5, local_n);
+
+   Print_vector(local_x, local_n, n, "\nScalar in array x: ", my_rank, comm);
+   Print_vector(local_y, local_n, n, "Scalar in array y: ", my_rank, comm);
 
    free(local_x);
    free(local_y);
@@ -305,20 +318,30 @@ void Parallel_vector_sum(
       local_z[local_i] = local_x[local_i] + local_y[local_i];
 }  /* Parallel_vector_sum */
 
-void Parallel_vector_dot(
-      double  local_x[]  /* in  */, 
-      double  local_y[]  /* in  */,
-      double  local_z[]  /* out */,
-      int     local_n    /* in  */,
-      double  local_dotProduct) {
+int Parallel_vector_dot(
+      double  local_x[], 
+      double  local_y[],
+      double  local_z[],
+      int     local_n) {
    int local_i;
    int local_j;
+   int result;
 
    for (local_i = 0; local_i < local_n; local_i++)
-      local_z[local_i] = local_x[local_i] * local_y[local_i];
+      local_j = local_x[local_i] * local_y[local_i];
 
-   for (local_j = 0; local_j < local_n; local_j++){
-      local_dotProduct += local_z[local_j];
-   }
+   MPI_Reduce(&local_j, &result, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+   return result;
       
 }
+
+int Parallel_vector_scalar(
+      double  local_vector[],
+      double  scalar,
+      int     local_n) {
+
+   int local_i;
+   for (local_i = 0; local_i < local_n; local_i++)
+      local_vector[local_i] = local_vector[local_i] * scalar;
+
+} 
